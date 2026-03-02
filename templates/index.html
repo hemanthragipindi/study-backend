@@ -3,7 +3,7 @@
 <head>
 <title>Study Manager App</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 
 <body>
@@ -20,7 +20,6 @@
 
 <div class="main">
 
-<!-- HOME -->
 <div id="home" class="section">
 <h1>Select Category</h1>
 <div class="card" onclick="openCategory('CA')">CA</div>
@@ -29,75 +28,9 @@
 <div class="card" onclick="openCategory('Practical')">Practical</div>
 </div>
 
-<!-- SUBJECTS -->
-<div id="subjects" class="section hidden">
-<button onclick="goHome()">⬅ Back</button>
-<h1 id="categoryTitle"></h1>
-<input id="subjectInput" placeholder="Add Subject">
-<button onclick="addSubject()">Add</button>
-<div id="subjectList"></div>
-</div>
-
-<!-- UNITS -->
-<div id="units" class="section hidden">
-<button onclick="goSubjects()">⬅ Back</button>
-<h1 id="subjectTitle"></h1>
-<div class="card" onclick="openNotes('Syllabus')">Syllabus</div>
-<div class="card" onclick="openNotes('Unit1')">Unit 1</div>
-<div class="card" onclick="openNotes('Unit2')">Unit 2</div>
-<div class="card" onclick="openNotes('Unit3')">Unit 3</div>
-<div class="card" onclick="openNotes('Unit4')">Unit 4</div>
-<div class="card" onclick="openNotes('Unit5')">Unit 5</div>
-<div class="card" onclick="openNotes('Unit6')">Unit 6</div>
-</div>
-
-<!-- NOTES -->
-<div id="notesPage" class="section hidden">
-
-<button onclick="goUnits()">⬅ Back</button>
-<h1 id="noteTitle"></h1>
-
-<div class="toolbar-top">
-<button onclick="createNote()">Add Note</button>
-<button onclick="addImage()">Add Image</button>
-<button onclick="addFile()">Add File</button>
-<input type="file" id="imageInput" accept="image/*" hidden>
-<input type="file" id="fileInput" hidden>
-<input id="searchFile" placeholder="Search files..." onkeyup="searchFiles()">
-</div>
-
-<div id="fileList" class="file-grid"></div>
-
-</div>
-
-<!-- EDITOR -->
-<div id="editorPage" class="section hidden">
-<button onclick="goUnits()">⬅ Back</button>
-<button onclick="saveFile()">Save</button>
-<h2 id="editorTitle"></h2>
-
-<div class="toolbar">
-<button onclick="formatText('bold')">B</button>
-<button onclick="formatText('italic')">I</button>
-<button onclick="formatText('underline')">U</button>
-<button onclick="formatText('insertUnorderedList')">• List</button>
-<button onclick="formatText('insertOrderedList')">1. List</button>
-<input type="color" onchange="setColor(this.value)">
-</div>
-
-<div id="editorBox" contenteditable="true" class="editor"></div>
-</div>
-
-<!-- RECYCLE -->
-<div id="recycle" class="section hidden">
-<h1>Recycle Bin</h1>
-<button onclick="goHome()">⬅ Back</button>
-<div id="recycleList"></div>
-</div>
-
 </div>
 </div>
 
-<script src="app.js"></script>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>
