@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, jsonify, render_template
 from flask_cors import CORS
 from pymongo import MongoClient
 
@@ -13,7 +13,7 @@ files = db["files"]
 
 @app.route("/")
 def home():
-    return "Backend Online 🚀"
+    return render_template("index.html")
 
 # SAVE FILE / NOTE
 @app.route("/api/save", methods=["POST"])
