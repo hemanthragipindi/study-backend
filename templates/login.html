@@ -82,7 +82,7 @@ fetch("/login",{
 method:"POST",
 headers:{"Content-Type":"application/json"},
 body:JSON.stringify({
-username:document.getElementById("email").value,
+email:document.getElementById("email").value,
 password:document.getElementById("pass").value
 })
 })
@@ -101,7 +101,7 @@ fetch("/register",{
 method:"POST",
 headers:{"Content-Type":"application/json"},
 body:JSON.stringify({
-username:document.getElementById("email").value,
+email:document.getElementById("email").value,
 password:document.getElementById("pass").value
 })
 })
