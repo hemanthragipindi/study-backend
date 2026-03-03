@@ -6,43 +6,62 @@ let currentUnit="";
 let currentFile="";
 let cachedFiles=[];
 
+// ================= SESSION CHECK =================
+fetch("/check-session").then(res=>{
+if(res.status===401){ window.location="/"; }
+});
+
 // ================= HELPER =================
 function el(id){ return document.getElementById(id); }
 
-// ================= SESSION + INIT =================
-document.addEventListener("DOMContentLoaded",function(){
+// ================= DARK MODE =================
+(function(){
+let btn=document.createElement("button");
+btn.innerText="🌙";
+btn.style.position="fixed";
+btn.style.bottom="20px";
+btn.style.right="20px";
+btn.style.padding="10px 15px";
+btn.style.borderRadius="50%";
+btn.style.zIndex="9999";
+document.body.appendChild(btn);
 
-fetch("/check-session")
-.then(res=>{
-if(res.status===401){
-window.location="/";
+function applyTheme(mode){
+if(mode==="dark"){
+document.body.style.background="#111";
+document.body.style.color="#eee";
+localStorage.setItem("theme","dark");
+btn.innerText="☀️";
+}else{
+document.body.style.background="";
+document.body.style.color="";
+localStorage.setItem("theme","light");
+btn.innerText="🌙";
 }
-});
+}
 
-showSection("home");
-loadStats();
-});
+btn.onclick=function(){
+let current=localStorage.getItem("theme")||"light";
+applyTheme(current==="light"?"dark":"light");
+};
 
-// ================= DASHBOARD STATS =================
+applyTheme(localStorage.getItem("theme")||"light");
+})();
+
+// ================= STATS =================
 function loadStats(){
-
 fetch(API_BASE+"/stats")
 .then(res=>res.json())
 .then(data=>{
+if(!data.total_files) return;
 
-let statsContainer = document.getElementById("statsContainer");
-if(!statsContainer) return;
-
-statsContainer.innerHTML="";
-
-statsContainer.innerHTML = `
+let statsHTML=`
 <div class="card-grid">
 <div class="card">📁 Total Files<br><strong>${data.total_files}</strong></div>
-<div class="card">🗑 Deleted Files<br><strong>${data.deleted_files}</strong></div>
+<div class="card">🗑 Deleted<br><strong>${data.deleted_files}</strong></div>
 <div class="card">📚 Subjects<br><strong>${data.subjects}</strong></div>
-</div>
-`;
-
+</div>`;
+el("home").insertAdjacentHTML("beforeend",statsHTML);
 });
 }
 
@@ -62,20 +81,13 @@ if(!input) return;
 fetch(API_BASE+"/add-subject",{
 method:"POST",
 headers:{"Content-Type":"application/json"},
-body:JSON.stringify({
-name:input,
-category:currentCategory
+body:JSON.stringify({name:input,category:currentCategory})
 })
-})
-.then(()=>{
-el("subjectInput").value="";
-loadSubjects();
-});
+.then(()=>{ el("subjectInput").value=""; loadSubjects(); });
 }
 
 function loadSubjects(){
 el("subjectList").innerHTML="";
-
 fetch(`${API_BASE}/get-subjects?category=${currentCategory}`)
 .then(res=>res.json())
 .then(subjects=>{
@@ -95,11 +107,9 @@ currentSubject=sub;
 showSection("units");
 el("subjectTitle").innerText=sub;
 
+let units=["Syllabus","Unit1","Unit2","Unit3","Unit4","Unit5","Unit6"];
 let unitList=el("unitList");
 unitList.innerHTML="";
-
-let units=["Syllabus","Unit1","Unit2","Unit3","Unit4","Unit5","Unit6"];
-
 units.forEach(u=>{
 let div=document.createElement("div");
 div.className="card";
@@ -119,117 +129,89 @@ loadFiles();
 
 function loadFiles(){
 el("fileList").innerHTML="";
-
 fetch(`${API_BASE}/get?category=${currentCategory}&subject=${currentSubject}&unit=${currentUnit}`)
 .then(res=>res.json())
 .then(files=>{
-
-cachedFiles = files;
-
+cachedFiles=files;
 if(files.length===0){
 el("fileList").innerHTML="<p>No files yet.</p>";
 return;
 }
 
 files.forEach(f=>{
-
 let icon="📝";
-if(f.type==="image") icon="🖼️";
 if(f.type==="file") icon="📄";
+if(f.type==="image") icon="🖼️";
 
 let div=document.createElement("div");
 div.className="card";
-
 div.innerHTML=`
 <strong>${icon} ${f.name}</strong>
-<div class="file-meta">${f.size||""} | ${f.date||""}</div>
 <div style="margin-top:8px;">
 <span onclick="previewFile('${f._id}',event)">👁</span>
-<span onclick="downloadFile('${f._id}',event)">⬇️</span>
 <span onclick="renameFile('${f._id}',event)">✏️</span>
-<span style="color:red" onclick="deleteFile('${f._id}',event)">🗑</span>
+<span onclick="deleteFile('${f._id}',event)" style="color:red;">🗑</span>
 </div>
 `;
-
 el("fileList").appendChild(div);
 });
 });
 }
 
-// ================= DOWNLOAD =================
-function downloadFile(id,e){
-e.stopPropagation();
-let file=cachedFiles.find(f=>f._id===id);
-if(!file) return;
-
-let a=document.createElement("a");
-a.href=file.content;
-a.download=file.name;
-a.click();
+// ================= ADD NOTE =================
+function createNote(){
+let name=prompt("Enter Note Name");
+if(!name) return;
+currentFile=name;
+el("editorTitle").innerText=name;
+el("editorBox").innerHTML="";
+showSection("editorPage");
 }
 
-// ================= DELETE =================
-function deleteFile(id,e){
-e.stopPropagation();
-if(!confirm("Delete this file?")) return;
+function saveFile(){
+let content=el("editorBox").innerHTML;
 
-fetch(API_BASE+"/delete",{
+fetch(API_BASE+"/save",{
 method:"POST",
 headers:{"Content-Type":"application/json"},
-body:JSON.stringify({id:id})
+body:JSON.stringify({
+category:currentCategory,
+subject:currentSubject,
+unit:currentUnit,
+name:currentFile,
+type:"note",
+content:content,
+size:"Text",
+date:new Date().toLocaleDateString()
 })
-.then(()=>loadFiles());
+})
+.then(()=>{ showSection("notesPage"); loadFiles(); });
 }
 
-// ================= PERMANENT DELETE =================
-function permanentDelete(id){
-if(!confirm("Permanent delete?")) return;
-
-fetch(API_BASE+"/permanent-delete",{
+// ================= UPLOAD =================
+function addFile(){
+el("fileInput").click();
+el("fileInput").onchange=function(){
+let file=this.files[0];
+let reader=new FileReader();
+reader.onload=e=>{
+fetch(API_BASE+"/save",{
 method:"POST",
 headers:{"Content-Type":"application/json"},
-body:JSON.stringify({id:id})
+body:JSON.stringify({
+category:currentCategory,
+subject:currentSubject,
+unit:currentUnit,
+name:file.name,
+type:"file",
+content:e.target.result,
+size:file.size+" bytes",
+date:new Date().toLocaleDateString()
 })
-.then(()=>openRecycle());
-}
-
-// ================= RESTORE =================
-function restoreFile(id){
-fetch(API_BASE+"/restore",{
-method:"POST",
-headers:{"Content-Type":"application/json"},
-body:JSON.stringify({id:id})
-})
-.then(()=>openRecycle());
-}
-
-// ================= RECYCLE =================
-function openRecycle(){
-showSection("recycle");
-
-fetch(API_BASE+"/recycle")
-.then(res=>res.json())
-.then(files=>{
-el("recycleList").innerHTML="";
-
-if(files.length===0){
-el("recycleList").innerHTML="<p>Recycle Bin is empty.</p>";
-return;
-}
-
-files.forEach(f=>{
-let div=document.createElement("div");
-div.className="card";
-div.innerHTML=`
-<strong>${f.name}</strong>
-<div style="margin-top:8px;">
-<span onclick="restoreFile('${f._id}')">🔄 Restore</span>
-<span style="color:red" onclick="permanentDelete('${f._id}')">❌ Delete Forever</span>
-</div>
-`;
-el("recycleList").appendChild(div);
-});
-});
+}).then(()=>loadFiles());
+};
+reader.readAsDataURL(file);
+};
 }
 
 // ================= PREVIEW =================
@@ -243,42 +225,110 @@ currentFile=file.name;
 el("editorTitle").innerText=file.name;
 el("editorBox").innerHTML=file.content;
 showSection("editorPage");
-return;
-}
-
+}else{
 window.open(file.content,"_blank");
 }
+}
 
-// ================= CHANGE PASSWORD =================
-function changePassword(){
+// ================= RENAME =================
+function renameFile(id,e){
+e.stopPropagation();
+let newName=prompt("New name:");
+if(!newName) return;
 
-let oldPass = el("oldPass").value;
-let newPass = el("newPass").value;
+fetch(API_BASE+"/rename",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({id:id,new_name:newName})
+})
+.then(()=>loadFiles());
+}
 
-if(!oldPass || !newPass){
-el("passMsg").innerText="Fill all fields";
+// ================= DELETE =================
+function deleteFile(id,e){
+e.stopPropagation();
+if(!confirm("Move to recycle bin?")) return;
+
+fetch(API_BASE+"/delete",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({id:id})
+})
+.then(()=>loadFiles());
+}
+
+// ================= RECYCLE =================
+function openRecycle(){
+showSection("recycle");
+fetch(API_BASE+"/recycle")
+.then(res=>res.json())
+.then(files=>{
+el("recycleList").innerHTML="";
+if(files.length===0){
+el("recycleList").innerHTML="<p>Recycle bin empty.</p>";
 return;
 }
 
-fetch(API_BASE+"/change-password",{
+files.forEach(f=>{
+let div=document.createElement("div");
+div.className="card";
+div.innerHTML=`
+<strong>${f.name}</strong>
+<div style="margin-top:8px;">
+<span onclick="restoreFile('${f._id}')">🔄 Restore</span>
+<span onclick="permanentDelete('${f._id}')" style="color:red;">❌ Delete Forever</span>
+</div>`;
+el("recycleList").appendChild(div);
+});
+});
+}
+
+function restoreFile(id){
+fetch(API_BASE+"/restore",{
 method:"POST",
 headers:{"Content-Type":"application/json"},
-body:JSON.stringify({
-old:oldPass,
-new:newPass
-})
-})
-.then(res=>res.json())
-.then(data=>{
-if(data.error){
-el("passMsg").style.color="red";
-el("passMsg").innerText=data.error;
-}else{
-el("passMsg").style.color="lightgreen";
-el("passMsg").innerText="Password updated successfully";
-el("oldPass").value="";
-el("newPass").value="";
+body:JSON.stringify({id:id})
+}).then(()=>openRecycle());
 }
+
+function permanentDelete(id){
+if(!confirm("Permanently delete?")) return;
+fetch(API_BASE+"/permanent-delete",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({id:id})
+}).then(()=>openRecycle());
+}
+
+// ================= SEARCH =================
+function globalSearch(){
+let keyword=prompt("Enter search keyword:");
+if(!keyword) return;
+
+fetch(API_BASE+"/search?q="+keyword)
+.then(res=>res.json())
+.then(results=>{
+showSection("notesPage");
+el("noteTitle").innerText="Search Results";
+el("fileList").innerHTML="";
+
+if(results.length===0){
+el("fileList").innerHTML="<p>No results found.</p>";
+return;
+}
+
+results.forEach(f=>{
+let div=document.createElement("div");
+div.className="card";
+div.innerHTML=`<strong>🔎 ${f.name}</strong>`;
+div.onclick=function(){
+currentCategory=f.category;
+currentSubject=f.subject;
+currentUnit=f.unit;
+previewFile(f._id,new Event("click"));
+};
+el("fileList").appendChild(div);
+});
 });
 }
 
@@ -290,3 +340,8 @@ sec.classList.add("hidden");
 let target=document.getElementById(id);
 if(target) target.classList.remove("hidden");
 }
+
+document.addEventListener("DOMContentLoaded",function(){
+showSection("home");
+loadStats();
+});

@@ -213,6 +213,44 @@ def recycle():
         r["_id"] = str(r["_id"])
 
     return jsonify(result)
+# ================= RENAME =================
+@app.route("/api/rename", methods=["POST"])
+def rename():
+    if "user" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    data = request.json
+
+    files.update_one(
+        {
+            "_id": ObjectId(data["id"]),
+            "user": session["user"]
+        },
+        {"$set": {"name": data["new_name"]}}
+    )
+
+    return jsonify({"status": "renamed"})
+# ================= SEARCH =================
+@app.route("/api/search")
+def search():
+    if "user" not in session:
+        return jsonify([])
+
+    keyword = request.args.get("q")
+
+    results = list(files.find({
+        "deleted": False,
+        "user": session["user"],
+        "$or": [
+            {"name": {"$regex": keyword, "$options": "i"}},
+            {"content": {"$regex": keyword, "$options": "i"}}
+        ]
+    }))
+
+    for r in results:
+        r["_id"] = str(r["_id"])
+
+    return jsonify(results)
 
 # ================= STATS =================
 @app.route("/api/stats")
