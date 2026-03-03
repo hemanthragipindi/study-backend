@@ -20,12 +20,53 @@
 
 <div class="main">
 
+<!-- HOME -->
 <div id="home" class="section">
 <h1>Select Category</h1>
 <div class="card" onclick="openCategory('CA')">CA</div>
 <div class="card" onclick="openCategory('Midterm')">Midterm</div>
 <div class="card" onclick="openCategory('Endterm')">End Term</div>
 <div class="card" onclick="openCategory('Practical')">Practical</div>
+</div>
+
+<!-- SUBJECTS -->
+<div id="subjects" class="section hidden">
+<button onclick="showSection('home')">⬅ Back</button>
+<h1 id="categoryTitle"></h1>
+<input id="subjectInput" placeholder="Add Subject">
+<button onclick="addSubject()">Add</button>
+<div id="subjectList"></div>
+</div>
+
+<!-- UNITS -->
+<div id="units" class="section hidden">
+<button onclick="showSection('subjects')">⬅ Back</button>
+<h1 id="subjectTitle"></h1>
+<div class="card" onclick="openNotes('Unit1')">Unit 1</div>
+<div class="card" onclick="openNotes('Unit2')">Unit 2</div>
+</div>
+
+<!-- NOTES -->
+<div id="notesPage" class="section hidden">
+<button onclick="showSection('units')">⬅ Back</button>
+<h1 id="noteTitle"></h1>
+<button onclick="createNote()">Add Note</button>
+<div id="fileList"></div>
+</div>
+
+<!-- EDITOR -->
+<div id="editorPage" class="section hidden">
+<button onclick="showSection('notesPage')">⬅ Back</button>
+<button onclick="saveFile()">Save</button>
+<h2 id="editorTitle"></h2>
+<div id="editorBox" contenteditable="true" class="editor"></div>
+</div>
+
+<!-- RECYCLE -->
+<div id="recycle" class="section hidden">
+<h1>Recycle Bin</h1>
+<button onclick="showSection('home')">⬅ Back</button>
+<div id="recycleList"></div>
 </div>
 
 </div>

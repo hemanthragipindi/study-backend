@@ -1,4 +1,4 @@
-const API_BASE = "http://127.0.0.1:5000/api";
+const API_BASE = "/api";
 
 var currentCategory="";
 var currentSubject="";
@@ -6,11 +6,6 @@ var currentUnit="";
 var currentFile="";
 
 function el(id){return document.getElementById(id);}
-
-function showSection(id){
-document.querySelectorAll(".section").forEach(s=>s.classList.add("hidden"));
-el(id).classList.remove("hidden");
-}
 
 // ================= CATEGORY =================
 function openCategory(name){
