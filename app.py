@@ -14,9 +14,10 @@ MONGO_URI = os.environ.get("MONGO_URI")
 
 if not MONGO_URI:
     raise Exception("MONGO_URI environment variable not set")
-client = MongoClient(MONGO_URI)
 
+client = MongoClient(MONGO_URI)
 db = client["study_manager"]
+
 files = db["files"]
 users = db["users"]
 subjects = db["subjects"]
@@ -64,14 +65,8 @@ def login():
     email = data.get("email")
     password = data.get("password")
 
-    if not email or not password:
-        return jsonify({"error": "Missing fields"}), 400
-
     user = users.find_one({"email": email})
-    if not user:
-        return jsonify({"error": "Invalid credentials"}), 401
-
-    if not bcrypt.checkpw(password.encode(), user["password"]):
+    if not user or not bcrypt.checkpw(password.encode(), user["password"]):
         return jsonify({"error": "Invalid credentials"}), 401
 
     session["user"] = email
@@ -83,21 +78,24 @@ def logout():
     session.clear()
     return jsonify({"message": "Logged out"})
 
-# ================= SUBJECTS =================
+# ================= ADD SUBJECT =================
 @app.route("/api/add-subject", methods=["POST"])
 def add_subject():
     if "user" not in session:
         return jsonify({"error": "Unauthorized"}), 401
 
     data = request.json
+
     subjects.insert_one({
         "name": data["name"],
         "category": data["category"],
-        "user": session["user"]
+        "user": session["user"],
+        "deleted": False   # NEW FIELD
     })
 
     return jsonify({"status": "added"})
 
+# ================= GET SUBJECTS =================
 @app.route("/api/get-subjects")
 def get_subjects():
     if "user" not in session:
@@ -107,13 +105,95 @@ def get_subjects():
 
     result = list(subjects.find({
         "category": category,
-        "user": session["user"]
+        "user": session["user"],
+        "deleted": {"$ne": True}
     }))
 
     for r in result:
         r["_id"] = str(r["_id"])
 
     return jsonify(result)
+
+# ================= DELETE SUBJECT (SOFT) =================
+@app.route("/api/delete-subject", methods=["POST"])
+def delete_subject():
+    if "user" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    data = request.json
+    subject_id = data["id"]
+
+    # Soft delete subject
+    subjects.update_one(
+        {"_id": ObjectId(subject_id), "user": session["user"]},
+        {"$set": {"deleted": True}}
+    )
+
+    # Soft delete all related files
+    files.update_many(
+        {"subject": data["name"], "user": session["user"]},
+        {"$set": {"deleted": True}}
+    )
+
+    return jsonify({"status": "subject deleted"})
+
+# ================= RESTORE SUBJECT =================
+@app.route("/api/restore-subject", methods=["POST"])
+def restore_subject():
+    if "user" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    data = request.json
+    subject_id = data["id"]
+
+    subjects.update_one(
+        {"_id": ObjectId(subject_id), "user": session["user"]},
+        {"$set": {"deleted": False}}
+    )
+
+    files.update_many(
+        {"subject": data["name"], "user": session["user"]},
+        {"$set": {"deleted": False}}
+    )
+
+    return jsonify({"status": "subject restored"})
+
+# ================= RECYCLE SUBJECTS =================
+@app.route("/api/recycle-subjects")
+def recycle_subjects():
+    if "user" not in session:
+        return jsonify([])
+
+    result = list(subjects.find({
+        "user": session["user"],
+        "deleted": True
+    }))
+
+    for r in result:
+        r["_id"] = str(r["_id"])
+
+    return jsonify(result)
+
+# ================= PERMANENT DELETE SUBJECT =================
+@app.route("/api/permanent-delete-subject", methods=["POST"])
+def permanent_delete_subject():
+    if "user" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    data = request.json
+    subject_id = data["id"]
+
+    subjects.delete_one({
+        "_id": ObjectId(subject_id),
+        "user": session["user"]
+    })
+
+    files.delete_many({
+        "subject": data["name"],
+        "user": session["user"]
+    })
+
+    return jsonify({"status": "subject permanently removed"})
 
 # ================= SAVE FILE =================
 @app.route("/api/save", methods=["POST"])
@@ -147,7 +227,7 @@ def get_files():
 
     return jsonify(result)
 
-# ================= DELETE =================
+# ================= DELETE FILE =================
 @app.route("/api/delete", methods=["POST"])
 def delete():
     if "user" not in session:
@@ -156,16 +236,13 @@ def delete():
     data = request.json
 
     files.update_one(
-        {
-            "_id": ObjectId(data["id"]),
-            "user": session["user"]
-        },
+        {"_id": ObjectId(data["id"]), "user": session["user"]},
         {"$set": {"deleted": True}}
     )
 
     return jsonify({"status": "deleted"})
 
-# ================= PERMANENT DELETE =================
+# ================= PERMANENT DELETE FILE =================
 @app.route("/api/permanent-delete", methods=["POST"])
 def permanent_delete():
     if "user" not in session:
@@ -180,7 +257,7 @@ def permanent_delete():
 
     return jsonify({"status": "removed"})
 
-# ================= RESTORE =================
+# ================= RESTORE FILE =================
 @app.route("/api/restore", methods=["POST"])
 def restore():
     if "user" not in session:
@@ -189,16 +266,13 @@ def restore():
     data = request.json
 
     files.update_one(
-        {
-            "_id": ObjectId(data["id"]),
-            "user": session["user"]
-        },
+        {"_id": ObjectId(data["id"]), "user": session["user"]},
         {"$set": {"deleted": False}}
     )
 
     return jsonify({"status": "restored"})
 
-# ================= RECYCLE =================
+# ================= RECYCLE FILES =================
 @app.route("/api/recycle")
 def recycle():
     if "user" not in session:
@@ -213,7 +287,8 @@ def recycle():
         r["_id"] = str(r["_id"])
 
     return jsonify(result)
-# ================= RENAME =================
+
+# ================= RENAME FILE =================
 @app.route("/api/rename", methods=["POST"])
 def rename():
     if "user" not in session:
@@ -222,14 +297,12 @@ def rename():
     data = request.json
 
     files.update_one(
-        {
-            "_id": ObjectId(data["id"]),
-            "user": session["user"]
-        },
+        {"_id": ObjectId(data["id"]), "user": session["user"]},
         {"$set": {"name": data["new_name"]}}
     )
 
     return jsonify({"status": "renamed"})
+
 # ================= SEARCH =================
 @app.route("/api/search")
 def search():
@@ -263,7 +336,7 @@ def stats():
     return jsonify({
         "total_files": files.count_documents({"user": user, "deleted": False}),
         "deleted_files": files.count_documents({"user": user, "deleted": True}),
-        "subjects": subjects.count_documents({"user": user})
+        "subjects": subjects.count_documents({"user": user, "deleted": {"$ne": True}})
     })
 
 # ================= CHANGE PASSWORD =================
@@ -273,9 +346,6 @@ def change_password():
         return jsonify({"error": "Unauthorized"}), 401
 
     data = request.json
-
-    if not data.get("old") or not data.get("new"):
-        return jsonify({"error": "Missing fields"}), 400
 
     user = users.find_one({"email": session["user"]})
 

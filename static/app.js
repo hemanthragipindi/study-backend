@@ -94,11 +94,30 @@ fetch(`${API_BASE}/get-subjects?category=${currentCategory}`)
 subjects.forEach(sub=>{
 let div=document.createElement("div");
 div.className="card";
-div.innerText=sub.name;
+
+div.innerHTML=`
+<strong>${sub.name}</strong>
+<div style="margin-top:8px;">
+<span onclick="event.stopPropagation(); deleteSubject('${sub._id}','${sub.name}')" style="color:red;">🗑</span>
+</div>
+`;
+
 div.onclick=()=>openUnits(sub.name);
 el("subjectList").appendChild(div);
 });
 });
+}
+
+// ================= DELETE SUBJECT =================
+function deleteSubject(id,name){
+if(!confirm("Move subject to recycle bin?")) return;
+
+fetch(API_BASE+"/delete-subject",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({id:id,name:name})
+})
+.then(()=>loadSubjects());
 }
 
 // ================= UNITS =================
@@ -158,93 +177,7 @@ el("fileList").appendChild(div);
 });
 }
 
-// ================= ADD NOTE =================
-function createNote(){
-let name=prompt("Enter Note Name");
-if(!name) return;
-currentFile=name;
-el("editorTitle").innerText=name;
-el("editorBox").innerHTML="";
-showSection("editorPage");
-}
-
-function saveFile(){
-let content=el("editorBox").innerHTML;
-
-fetch(API_BASE+"/save",{
-method:"POST",
-headers:{"Content-Type":"application/json"},
-body:JSON.stringify({
-category:currentCategory,
-subject:currentSubject,
-unit:currentUnit,
-name:currentFile,
-type:"note",
-content:content,
-size:"Text",
-date:new Date().toLocaleDateString()
-})
-})
-.then(()=>{ showSection("notesPage"); loadFiles(); });
-}
-
-// ================= UPLOAD =================
-function addFile(){
-el("fileInput").click();
-el("fileInput").onchange=function(){
-let file=this.files[0];
-let reader=new FileReader();
-reader.onload=e=>{
-fetch(API_BASE+"/save",{
-method:"POST",
-headers:{"Content-Type":"application/json"},
-body:JSON.stringify({
-category:currentCategory,
-subject:currentSubject,
-unit:currentUnit,
-name:file.name,
-type:"file",
-content:e.target.result,
-size:file.size+" bytes",
-date:new Date().toLocaleDateString()
-})
-}).then(()=>loadFiles());
-};
-reader.readAsDataURL(file);
-};
-}
-
-// ================= PREVIEW =================
-function previewFile(id,e){
-e.stopPropagation();
-let file=cachedFiles.find(f=>f._id===id);
-if(!file) return;
-
-if(file.type==="note"){
-currentFile=file.name;
-el("editorTitle").innerText=file.name;
-el("editorBox").innerHTML=file.content;
-showSection("editorPage");
-}else{
-window.open(file.content,"_blank");
-}
-}
-
-// ================= RENAME =================
-function renameFile(id,e){
-e.stopPropagation();
-let newName=prompt("New name:");
-if(!newName) return;
-
-fetch(API_BASE+"/rename",{
-method:"POST",
-headers:{"Content-Type":"application/json"},
-body:JSON.stringify({id:id,new_name:newName})
-})
-.then(()=>loadFiles());
-}
-
-// ================= DELETE =================
+// ================= DELETE FILE =================
 function deleteFile(id,e){
 e.stopPropagation();
 if(!confirm("Move to recycle bin?")) return;
@@ -260,15 +193,34 @@ body:JSON.stringify({id:id})
 // ================= RECYCLE =================
 function openRecycle(){
 showSection("recycle");
-fetch(API_BASE+"/recycle")
-.then(res=>res.json())
-.then(files=>{
+
+Promise.all([
+fetch(API_BASE+"/recycle").then(res=>res.json()),
+fetch(API_BASE+"/recycle-subjects").then(res=>res.json())
+])
+.then(([files,subjects])=>{
+
 el("recycleList").innerHTML="";
-if(files.length===0){
+
+if(files.length===0 && subjects.length===0){
 el("recycleList").innerHTML="<p>Recycle bin empty.</p>";
 return;
 }
 
+// Deleted Subjects
+subjects.forEach(s=>{
+let div=document.createElement("div");
+div.className="card";
+div.innerHTML=`
+<strong>📚 ${s.name}</strong>
+<div style="margin-top:8px;">
+<span onclick="restoreSubject('${s._id}','${s.name}')">🔄 Restore</span>
+<span onclick="permanentDeleteSubject('${s._id}','${s.name}')" style="color:red;">❌ Delete Forever</span>
+</div>`;
+el("recycleList").appendChild(div);
+});
+
+// Deleted Files
 files.forEach(f=>{
 let div=document.createElement("div");
 div.className="card";
@@ -280,7 +232,25 @@ div.innerHTML=`
 </div>`;
 el("recycleList").appendChild(div);
 });
+
 });
+}
+
+function restoreSubject(id,name){
+fetch(API_BASE+"/restore-subject",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({id:id,name:name})
+}).then(()=>openRecycle());
+}
+
+function permanentDeleteSubject(id,name){
+if(!confirm("Permanently delete subject?")) return;
+fetch(API_BASE+"/permanent-delete-subject",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({id:id,name:name})
+}).then(()=>openRecycle());
 }
 
 function restoreFile(id){
