@@ -350,3 +350,17 @@ document.body.appendChild(btn);
 
 function formatText(cmd){document.execCommand(cmd,false,null);}
 function setColor(c){document.execCommand("foreColor",false,c);}
+// ================= SECTION CONTROL =================
+function showSection(id){
+  document.querySelectorAll(".section").forEach(sec=>{
+    sec.classList.add("hidden");
+  });
+
+  var target = document.getElementById(id);
+  if(target){
+    target.classList.remove("hidden");
+  }
+}
+document.addEventListener("DOMContentLoaded", function(){
+  showSection("home");
+});
