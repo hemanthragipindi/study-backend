@@ -1,260 +1,292 @@
 const API_BASE = "/api";
 
-var currentCategory="";
-var currentSubject="";
-var currentUnit="";
-var currentFile="";
+let currentCategory="";
+let currentSubject="";
+let currentUnit="";
+let currentFile="";
+let cachedFiles=[];
 
-function el(id){return document.getElementById(id);}
+// ================= HELPER =================
+function el(id){ return document.getElementById(id); }
 
-// ================= SECTION CONTROL =================
-function showSection(id){
-  document.querySelectorAll(".section").forEach(sec=>{
-    sec.classList.add("hidden");
-  });
-  var target = document.getElementById(id);
-  if(target) target.classList.remove("hidden");
+// ================= SESSION + INIT =================
+document.addEventListener("DOMContentLoaded",function(){
+
+fetch("/check-session")
+.then(res=>{
+if(res.status===401){
+window.location="/";
 }
-
-document.addEventListener("DOMContentLoaded", function(){
-  showSection("home");
 });
+
+showSection("home");
+loadStats();
+});
+
+// ================= DASHBOARD STATS =================
+function loadStats(){
+
+fetch(API_BASE+"/stats")
+.then(res=>res.json())
+.then(data=>{
+
+let statsContainer = document.getElementById("statsContainer");
+if(!statsContainer) return;
+
+statsContainer.innerHTML="";
+
+statsContainer.innerHTML = `
+<div class="card-grid">
+<div class="card">📁 Total Files<br><strong>${data.total_files}</strong></div>
+<div class="card">🗑 Deleted Files<br><strong>${data.deleted_files}</strong></div>
+<div class="card">📚 Subjects<br><strong>${data.subjects}</strong></div>
+</div>
+`;
+
+});
+}
 
 // ================= CATEGORY =================
 function openCategory(name){
-  currentCategory=name;
-  showSection("subjects");
-  el("categoryTitle").innerText=name;
-  loadSubjects();
+currentCategory=name;
+showSection("subjects");
+el("categoryTitle").innerText=name;
+loadSubjects();
 }
-
-function goHome(){showSection("home");}
 
 // ================= SUBJECT =================
 function addSubject(){
-  var input=el("subjectInput").value.trim();
-  if(!input) return;
+let input=el("subjectInput").value.trim();
+if(!input) return;
 
-  var arr=JSON.parse(localStorage.getItem(currentCategory))||[];
-  arr.push(input);
-  localStorage.setItem(currentCategory,JSON.stringify(arr));
-  el("subjectInput").value="";
-  loadSubjects();
+fetch(API_BASE+"/add-subject",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({
+name:input,
+category:currentCategory
+})
+})
+.then(()=>{
+el("subjectInput").value="";
+loadSubjects();
+});
 }
 
 function loadSubjects(){
-  el("subjectList").innerHTML="";
-  var arr=JSON.parse(localStorage.getItem(currentCategory))||[];
+el("subjectList").innerHTML="";
 
-  arr.forEach((sub)=>{
-    var div=document.createElement("div");
-    div.className="card";
-
-    div.innerHTML = `
-      <strong>${sub}</strong>
-      <span style="float:right;color:red;cursor:pointer;"
-      onclick="deleteSubject('${sub}',event)">🗑</span>
-    `;
-
-    div.onclick=()=>openUnits(sub);
-    el("subjectList").appendChild(div);
-  });
-}
-
-function deleteSubject(name,e){
-  e.stopPropagation();
-  var arr=JSON.parse(localStorage.getItem(currentCategory))||[];
-  arr=arr.filter(s=>s!==name);
-  localStorage.setItem(currentCategory,JSON.stringify(arr));
-  loadSubjects();
+fetch(`${API_BASE}/get-subjects?category=${currentCategory}`)
+.then(res=>res.json())
+.then(subjects=>{
+subjects.forEach(sub=>{
+let div=document.createElement("div");
+div.className="card";
+div.innerText=sub.name;
+div.onclick=()=>openUnits(sub.name);
+el("subjectList").appendChild(div);
+});
+});
 }
 
 // ================= UNITS =================
 function openUnits(sub){
-  currentSubject=sub;
-  showSection("units");
-  el("subjectTitle").innerText=sub;
+currentSubject=sub;
+showSection("units");
+el("subjectTitle").innerText=sub;
 
-  // Dynamically generate units
-  var unitContainer = el("unitList");
-  if(unitContainer){
-    unitContainer.innerHTML="";
+let unitList=el("unitList");
+unitList.innerHTML="";
 
-    const units = ["Syllabus","Unit1","Unit2","Unit3","Unit4","Unit5","Unit6"];
+let units=["Syllabus","Unit1","Unit2","Unit3","Unit4","Unit5","Unit6"];
 
-    units.forEach(u=>{
-      var div=document.createElement("div");
-      div.className="card";
-      div.innerText=u;
-      div.onclick=()=>openNotes(u);
-      unitContainer.appendChild(div);
-    });
-  }
+units.forEach(u=>{
+let div=document.createElement("div");
+div.className="card";
+div.innerText=u;
+div.onclick=()=>openNotes(u);
+unitList.appendChild(div);
+});
 }
 
 // ================= NOTES =================
 function openNotes(unit){
-  currentUnit=unit;
-  showSection("notesPage");
-  el("noteTitle").innerText=unit;
-  loadFiles();
+currentUnit=unit;
+showSection("notesPage");
+el("noteTitle").innerText=unit;
+loadFiles();
 }
 
 function loadFiles(){
-  el("fileList").innerHTML="";
+el("fileList").innerHTML="";
 
-  fetch(API_BASE + "/get?category=" + currentCategory +
-  "&subject=" + currentSubject +
-  "&unit=" + currentUnit)
-  .then(res=>res.json())
-  .then(files=>{
-    files.forEach((f)=>{
+fetch(`${API_BASE}/get?category=${currentCategory}&subject=${currentSubject}&unit=${currentUnit}`)
+.then(res=>res.json())
+.then(files=>{
 
-      var icon="📝";
-      if(f.type==="image") icon="🖼️";
-      if(f.type==="file") icon="📄";
+cachedFiles = files;
 
-      var div=document.createElement("div");
-      div.className="card";
-
-      div.innerHTML=`
-        <strong>${icon} ${f.name}</strong>
-        <div class="file-meta">${f.size||""} | ${f.date||""}</div>
-        <div>
-          <span onclick="previewFile('${f.name}',event)">👁</span>
-          <span onclick="downloadFile('${f.name}',event)">⬇</span>
-          <span onclick="renameFile('${f.name}',event)">✏️</span>
-          <span style="color:red" onclick="deleteFile('${f.name}',event)">🗑</span>
-        </div>
-      `;
-
-      el("fileList").appendChild(div);
-    });
-  });
+if(files.length===0){
+el("fileList").innerHTML="<p>No files yet.</p>";
+return;
 }
 
-// ================= NOTE =================
-function createNote(){
-  var name=prompt("Enter Note Name");
-  if(!name) return;
-  currentFile=name;
-  el("editorTitle").innerText=name;
-  el("editorBox").innerHTML="";
-  showSection("editorPage");
-}
+files.forEach(f=>{
 
-function saveFile(){
-  var content=el("editorBox").innerHTML;
+let icon="📝";
+if(f.type==="image") icon="🖼️";
+if(f.type==="file") icon="📄";
 
-  fetch(API_BASE + "/save",{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({
-      category:currentCategory,
-      subject:currentSubject,
-      unit:currentUnit,
-      name:currentFile,
-      type:"note",
-      content:content,
-      size:"Text",
-      date:new Date().toLocaleDateString()
-    })
-  }).then(()=>{showSection("notesPage");loadFiles();});
-}
+let div=document.createElement("div");
+div.className="card";
 
-// ================= UPLOAD =================
-function addFile(){
-  el("fileInput").click();
-  el("fileInput").onchange=function(){
-    var file=this.files[0];
-    if(!file) return;
+div.innerHTML=`
+<strong>${icon} ${f.name}</strong>
+<div class="file-meta">${f.size||""} | ${f.date||""}</div>
+<div style="margin-top:8px;">
+<span onclick="previewFile('${f._id}',event)">👁</span>
+<span onclick="downloadFile('${f._id}',event)">⬇️</span>
+<span onclick="renameFile('${f._id}',event)">✏️</span>
+<span style="color:red" onclick="deleteFile('${f._id}',event)">🗑</span>
+</div>
+`;
 
-    var reader=new FileReader();
-    reader.onload=e=>saveUploadedFile(file.name,e.target.result,"file");
-    reader.readAsDataURL(file);
-  };
-}
-
-function saveUploadedFile(name,content,type){
-  var sizeKB=Math.round((content.length*3/4)/1024);
-
-  fetch(API_BASE + "/save",{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({
-      category:currentCategory,
-      subject:currentSubject,
-      unit:currentUnit,
-      name:name,
-      type:type,
-      content:content,
-      size:sizeKB+" KB",
-      date:new Date().toLocaleDateString()
-    })
-  }).then(()=>loadFiles());
-}
-
-// ================= DELETE =================
-function deleteFile(name,e){
-  e.stopPropagation();
-  fetch(API_BASE + "/delete",{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({name:name})
-  }).then(()=>loadFiles());
-}
-
-// ================= RENAME =================
-function renameFile(name,e){
-  e.stopPropagation();
-  var newName=prompt("Rename file:",name);
-  if(!newName) return;
-
-  fetch(API_BASE + "/rename",{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({old:name,new:newName})
-  }).then(()=>loadFiles());
-}
-
-// ================= PREVIEW =================
-function previewFile(name,e){
-  e.stopPropagation();
-
-  fetch(API_BASE + "/get?category=" + currentCategory +
-  "&subject=" + currentSubject +
-  "&unit=" + currentUnit)
-  .then(res=>res.json())
-  .then(files=>{
-    var file=files.find(f=>f.name===name);
-    if(!file) return;
-
-    if(file.type==="note"){
-      currentFile=file.name;
-      el("editorTitle").innerText=file.name;
-      el("editorBox").innerHTML=file.content;
-      showSection("editorPage");
-    }else{
-      window.open(file.content,"_blank");
-    }
-  });
+el("fileList").appendChild(div);
+});
+});
 }
 
 // ================= DOWNLOAD =================
-function downloadFile(name,e){
-  e.stopPropagation();
+function downloadFile(id,e){
+e.stopPropagation();
+let file=cachedFiles.find(f=>f._id===id);
+if(!file) return;
 
-  fetch(API_BASE + "/get?category=" + currentCategory +
-  "&subject=" + currentSubject +
-  "&unit=" + currentUnit)
-  .then(res=>res.json())
-  .then(files=>{
-    var file=files.find(f=>f.name===name);
-    if(!file) return;
+let a=document.createElement("a");
+a.href=file.content;
+a.download=file.name;
+a.click();
+}
 
-    var a=document.createElement("a");
-    a.href=file.content;
-    a.download=name;
-    a.click();
-  });
+// ================= DELETE =================
+function deleteFile(id,e){
+e.stopPropagation();
+if(!confirm("Delete this file?")) return;
+
+fetch(API_BASE+"/delete",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({id:id})
+})
+.then(()=>loadFiles());
+}
+
+// ================= PERMANENT DELETE =================
+function permanentDelete(id){
+if(!confirm("Permanent delete?")) return;
+
+fetch(API_BASE+"/permanent-delete",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({id:id})
+})
+.then(()=>openRecycle());
+}
+
+// ================= RESTORE =================
+function restoreFile(id){
+fetch(API_BASE+"/restore",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({id:id})
+})
+.then(()=>openRecycle());
+}
+
+// ================= RECYCLE =================
+function openRecycle(){
+showSection("recycle");
+
+fetch(API_BASE+"/recycle")
+.then(res=>res.json())
+.then(files=>{
+el("recycleList").innerHTML="";
+
+if(files.length===0){
+el("recycleList").innerHTML="<p>Recycle Bin is empty.</p>";
+return;
+}
+
+files.forEach(f=>{
+let div=document.createElement("div");
+div.className="card";
+div.innerHTML=`
+<strong>${f.name}</strong>
+<div style="margin-top:8px;">
+<span onclick="restoreFile('${f._id}')">🔄 Restore</span>
+<span style="color:red" onclick="permanentDelete('${f._id}')">❌ Delete Forever</span>
+</div>
+`;
+el("recycleList").appendChild(div);
+});
+});
+}
+
+// ================= PREVIEW =================
+function previewFile(id,e){
+e.stopPropagation();
+let file=cachedFiles.find(f=>f._id===id);
+if(!file) return;
+
+if(file.type==="note"){
+currentFile=file.name;
+el("editorTitle").innerText=file.name;
+el("editorBox").innerHTML=file.content;
+showSection("editorPage");
+return;
+}
+
+window.open(file.content,"_blank");
+}
+
+// ================= CHANGE PASSWORD =================
+function changePassword(){
+
+let oldPass = el("oldPass").value;
+let newPass = el("newPass").value;
+
+if(!oldPass || !newPass){
+el("passMsg").innerText="Fill all fields";
+return;
+}
+
+fetch(API_BASE+"/change-password",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({
+old:oldPass,
+new:newPass
+})
+})
+.then(res=>res.json())
+.then(data=>{
+if(data.error){
+el("passMsg").style.color="red";
+el("passMsg").innerText=data.error;
+}else{
+el("passMsg").style.color="lightgreen";
+el("passMsg").innerText="Password updated successfully";
+el("oldPass").value="";
+el("newPass").value="";
+}
+});
+}
+
+// ================= SECTION CONTROL =================
+function showSection(id){
+document.querySelectorAll(".section").forEach(sec=>{
+sec.classList.add("hidden");
+});
+let target=document.getElementById(id);
+if(target) target.classList.remove("hidden");
 }
